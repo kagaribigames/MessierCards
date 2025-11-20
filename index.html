@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>카드 뽑기</title>
+  <style>
+    body{font-family:system-ui,-apple-system,'Noto Sans KR',sans-serif;padding:12px;max-width:720px;margin:0 auto;}
+    button{font-size:18px;padding:12px 18px;border-radius:8px;}
+    .card{margin-top:16px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fff;}
+    .meta{color:#666;font-size:14px;}
+  </style>
+</head>
+<body>
+  <h1>카드 뽑기</h1>
+  <div>
+    <label>언어 (F12에서 선택된 값으로 덮어씌워질 수 있음):</label>
+    <select id="langSelect">
+      <option value="KR">한국어 (KR)</option>
+      <option value="EN">영어 (EN)</option>
+      <option value="JP">일본어 (JP)</option>
+    </select>
+  </div>
+  <div style="margin-top:12px;">
+    <button id="pickBtn">카드 뽑기</button>
+    <button id="pickFilteredBtn">타입 필터로 뽑기</button>
+    <input id="typeFilter" placeholder="예: 액션, 미션, 페널티 ..." style="margin-left:8px;padding:6px;" />
+  </div>
+
+  <div id="cardArea"></div>
+
+  <script>
+    // 여기에 Apps Script로 배포한 웹앱 URL을 넣으세요:
+    const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbymlrGyIlwCb1f7szdrrCo3IrzDk0lE5e9SN-t8VAi5QuDf_Zkb3qA0ZCVW9tuEXqM/exec";
+
+    const pickBtn = document.getElementById('pickBtn');
+    const pickFilteredBtn = document.getElementById('pickFilteredBtn');
+    const cardArea = document.getElementById('cardArea');
+    const langSelect = document.getElementById('langSelect');
+    const typeFilter = document.getElementById('typeFilter');
+
+    async function fetchCard() {
+      // 간단히 GET 호출
+      const res = await fetch(WEBAPP_URL);
+      if (!res.ok) throw new Error("네트워크 에러");
+      const card = await res.json();
+      return card;
+    }
+
+    function renderCard(card) {
+      if (card.error) {
+        cardArea.innerHTML = `<div class="card">오류: ${card.error}</div>`;
+        return;
+      }
+      cardArea.innerHTML = `
+        <div class="card">
+          <div class="meta">No: ${card.No} • Type: ${card.Type} • Dice6: ${card.Dice6} • Dice12: ${card.Dice12}</div>
+          <h2>${card.Name || card.BaseName}</h2>
+          <p>${card.Desc || card.BaseDesc}</p>
+          <pre>${card.Action || card.BaseAction}</pre>
+          <div class="meta">원본 행: ${card._sheetRow || "-"}</div>
+        </div>
+      `;
+    }
+
+    pickBtn.addEventListener('click', async () => {
+      try {
+        const card = await fetchCard();
+        renderCard(card);
+      } catch (err) {
+        cardArea.innerHTML = `<div class="card">불러오기 실패: ${err.message}</div>`;
+      }
+    });
+
+    // 간단한 필터 방식: 서버에서 필터 기능을 안 넣었으므로
+    // 클라이언트에서 여러번 뽑아서 조건 만족하면 보여줌(최대 시도 제한)
+    pickFilteredBtn.addEventListener('click', async () => {
+      const want = (typeFilter.value || "").trim();
+      if (!want) { alert("필터 타입을 입력하세요."); return; }
+      cardArea.innerHTML = `<div class="card">타입 "${want}" 인 카드 뽑는 중...</div>`;
+      try {
+        let tries = 0, found = null;
+        while (tries < 30 && !found) {
+          const card = await fetchCard();
+          if (String(card.Type || "").trim() === want) found = card;
+          tries++;
+        }
+        if (found) renderCard(found);
+        else cardArea.innerHTML = `<div class="card">30번 시도했지만 타입 '${want}' 카드를 못찾았습니다.</div>`;
+      } catch (err) {
+        cardArea.innerHTML = `<div class="card">오류: ${err.message}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>
